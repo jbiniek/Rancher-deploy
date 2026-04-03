@@ -6,9 +6,28 @@ echo "=== Rozpoczynam instalację K3s i Ranchera ==="
 
 # 1. Przygotowanie systemu
 echo ">>> Aktualizacja pakietów i wyłączanie firewalla..."
-zypper refresh
-zypper install -y curl tar gzip awk jq
-systemctl disable --now firewalld
+zypper --non-interactive refresh
+zypper --non-interactive up
+zypper --non-interactive install -y curl tar gzip awk jq
+
+# Upewnienie się, że firewall działa i startuje z systemem
+systemctl enable --now firewalld
+
+# 1.1 Udostępnienie niezbędnych portów na zewnątrz
+# Porty 80 i 443 dla interfejsu webowego Ranchera (i obsługi certyfikatów)
+firewall-cmd --permanent --add-port=80/tcp
+firewall-cmd --permanent --add-port=443/tcp
+# Port 6443 dla API Kubernetesa (niezbędny, aby kubectl działał poprawnie)
+firewall-cmd --permanent --add-port=6443/tcp
+
+# 1.2. Odblokowanie ruchu wewnętrznego klastra
+# Domyślne podsieci K3s dla Podów (10.42.0.0/16) i Serwisów (10.43.0.0/16) 
+# dodajemy do strefy zaufanej (trusted), aby mogły swobodnie ze sobą rozmawiać.
+firewall-cmd --permanent --zone=trusted --add-source=10.42.0.0/16
+firewall-cmd --permanent --zone=trusted --add-source=10.43.0.0/16
+
+# 1.3. Zastosowanie nowych reguł
+firewall-cmd --reload
 
 # 2. Instalacja k3s
 echo ">>> Instalacja K3s..."
