@@ -4,9 +4,16 @@ set -e
 
 echo "=== Rozpoczynam instalację K3s i Ranchera ==="
 
-# 1. Pobranie adresu IP na samym początku (przed utworzeniem wirtualnych interfejsów K3s)
-export VM_IP=$(ip route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
-echo ">>> Wykryty zewnętrzny adres IP maszyny: $VM_IP"
+# 1. Pobranie adresu IP (wersja dla maszyn z publicznym IP za NAT-em)
+echo ">>> Pobieranie publicznego adresu IP..."
+export VM_IP=$(curl -s ifconfig.me)
+
+# Zabezpieczenie: jeśli ifconfig.me nie odpowie, używamy alternatywy
+if [ -z "$VM_IP" ]; then
+  export VM_IP=$(curl -s icanhazip.com)
+fi
+
+echo ">>> Wykryty publiczny adres IP maszyny: $VM_IP"
 
 # 2. Przygotowanie systemu
 echo ">>> Aktualizacja pakietów i instalacja narzędzi..."
@@ -30,7 +37,8 @@ firewall-cmd --reload
 
 # 4. Instalacja k3s
 echo ">>> Instalacja K3s..."
-curl -sfL https://get.k3s.io | sh -
+# Dodajemy publiczne IP do certyfikatów (Subject Alternative Name)
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --tls-san $VM_IP" sh -
 
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
