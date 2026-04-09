@@ -6,12 +6,13 @@ echo "=== Rozpoczynam instalację K3s i Ranchera (Wersja Ubuntu z WGET) ==="
 
 # 1. Pobranie publicznego adresu IP za pomocą wget
 echo ">>> Pobieranie publicznego adresu IP..."
-# Flagi -q (quiet) oraz -O- (output to stdout) zachowują się jak curl -s
-export VM_IP=$(wget -qO- ifconfig.me)
 
-# Zabezpieczenie: jeśli ifconfig.me nie odpowie, używamy alternatywy
-if [ -z "$VM_IP" ]; then
-  export VM_IP=$(wget -qO- icanhazip.com)
+# Używamy serwisów API, które zawsze zwracają czysty tekst (plain text)
+export VM_IP=$(wget -qO- https://api.ipify.org)
+
+# Zabezpieczenie: jeśli ipify.org nie odpowie, używamy ident.me
+if [ -z "$VM_IP" ] || [[ "$VM_IP" == *"<html"* ]]; then
+  export VM_IP=$(wget -qO- https://ident.me)
 fi
 
 echo ">>> Wykryty publiczny adres IP maszyny: $VM_IP"
