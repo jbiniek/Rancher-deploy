@@ -2,9 +2,9 @@
 # Zatrzymuje działanie skryptu w przypadku jakiegokolwiek błędu
 set -e 
 
-echo "=== Rozpoczynam instalację K3s i Ranchera ==="
+echo "=== Rozpoczynam instalację K3s i Ranchera (Wersja Ubuntu 24 LTS) ==="
 
-# 1. Pobranie adresu IP (wersja dla maszyn z publicznym IP za NAT-em)
+# 1. Pobranie adresu IP (wersja dla maszyn z publicznym IP)
 echo ">>> Pobieranie publicznego adresu IP..."
 export VM_IP=$(curl -s ifconfig.me)
 
@@ -17,27 +17,34 @@ echo ">>> Wykryty publiczny adres IP maszyny: $VM_IP"
 
 # 2. Przygotowanie systemu
 echo ">>> Aktualizacja pakietów i instalacja narzędzi..."
-zypper --non-interactive refresh
-zypper --non-interactive patch
-zypper --non-interactive install -y curl tar gzip awk jq
+# Wymuszenie braku interaktywnych okienek w Ubuntu
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y curl tar gzip awk jq
 
-# 3. Konfiguracja Firewalld
-echo ">>> Konfiguracja firewalla..."
-systemctl enable --now firewalld
+# 3. Konfiguracja Firewalla (UFW)
+echo ">>> Konfiguracja firewalla (UFW)..."
+# UFW w Ubuntu domyślnie blokuje ruch forwardowany, co psuje sieć CNI (Flannel) w K3s.
+# Zmieniamy domyślną politykę na ACCEPT.
+sed -i 's/DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
 
-# Otwarcie portów dla ruchu HTTP/HTTPS oraz API Kubernetesa
-firewall-cmd --permanent --add-port=80/tcp
-firewall-cmd --permanent --add-port=443/tcp
-firewall-cmd --permanent --add-port=6443/tcp
+# Dodajemy reguły (BARDZO WAŻNE: upewniamy się, że SSH jest otwarte!)
+ufw allow ssh
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow 6443/tcp
 
 # Zaufanie dla wewnętrznej sieci K3s (komunikacja podów i serwisów)
-firewall-cmd --permanent --zone=trusted --add-source=10.42.0.0/16
-firewall-cmd --permanent --zone=trusted --add-source=10.43.0.0/16
-firewall-cmd --reload
+ufw allow from 10.42.0.0/16
+ufw allow from 10.43.0.0/16
+
+# Włączenie UFW bez pytania o potwierdzenie
+ufw --force enable
+ufw reload
 
 # 4. Instalacja k3s
 echo ">>> Instalacja K3s..."
-# Dodajemy publiczne IP do certyfikatów (Subject Alternative Name)
+# Dodajemy publiczne IP do certyfikatów serwera API (Subject Alternative Name)
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --tls-san $VM_IP" sh -
 
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
